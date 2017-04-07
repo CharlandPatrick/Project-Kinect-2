@@ -10,10 +10,6 @@ import Xlib.XK
 import Xlib.error
 import Xlib.ext.xtest
 
-# Pour faire le timer de la souris
-import time
-import sys
-
 constList = lambda length, val: [val for _ in range(length)] #Gives a list of size length filled with the variable val. length is a list and val is dynamic
 
 """
@@ -67,21 +63,15 @@ ratioY = scr.height_in_pixels/480
 def move_mouse(x,y):#Moves the mouse to (x,y). x and y are ints
     s = d.screen()
     root = s.root
-    print(x,y)
     root.warp_pointer(x,y) # P-e acceleration de la souris
     d.sync()
-
-# TODO : Faire un timer pour que quand on perd le blob, la souris ce cache seulement apres x secondes
-def mouse_hide():
-    s = d.screen()
-    root = s.root
-    root.warp_pointer(scr.width_in_pixels, scr.height_in_pixels)
+    
+def click_down(button):#Simulates a down click. Button is an int
+    Xlib.ext.xtest.fake_input(d,X.ButtonPress, button)
     d.sync()
-
-def mouse_center():
-    s = d.screen()
-    root = s.root
-    root.warp_pointer(scr.width_in_pixels/2, scr.height_in_pixels/2)
+    
+def click_up(button): #Simulates a up click. Button is an int
+    Xlib.ext.xtest.fake_input(d,X.ButtonRelease, button)
     d.sync()
 
 """
@@ -118,10 +108,9 @@ def hand_tracker():
     screenFlipped = pygame.display.set_mode((xSize,ySize),pygame.RESIZABLE) #creates surface that will be flipped (mirror display)
     screen.fill(BLACK) #Make the window black
     
-    timerMouseStart = False
-    debutTimer = 1
-    dureeIntervalEnSecondes = 10
-    mouseToCenter = False
+    myfont = pygame.font.SysFont("monospace", 15)
+    label = myfont.render("Some text!", 1, (255,255,0))
+    screen.blit(label, (100,100))
 
     done = False #Iterator boolean --> Tells programw when to terminate
     dummy = False #Very important bool for mouse manipulation
@@ -129,9 +118,8 @@ def hand_tracker():
         screen.fill(BLACK) #Make the window black
         (depth,_) = get_depth() #Get the depth from the kinect 
         depth = depth.astype(np.float32) #Convert the depth to a 32 bit float
-        #IMPORTANT Setter ici le cadre de detection (800-1200 est pas pire)
-        _,depthThresh = cv2.threshold(depth, 700, 255, cv2.THRESH_BINARY_INV) #Threshold the depth for a binary image. Thresholded at 600 arbitary units
-        _,back = cv2.threshold(depth, 1000, 255, cv2.THRESH_BINARY_INV) #Threshold the background in order to have an outlined background and segmented foreground
+        _,depthThresh = cv2.threshold(depth, 600, 255, cv2.THRESH_BINARY_INV) #Threshold the depth for a binary image. Thresholded at 600 arbitary units
+        _,back = cv2.threshold(depth, 900, 255, cv2.THRESH_BINARY_INV) #Threshold the background in order to have an outlined background and segmented foreground
         blobData = BlobAnalysis(depthThresh) #Creates blobData object using BlobAnalysis class
         blobDataBack = BlobAnalysis(back) #Creates blobDataBack object using BlobAnalysis class
         
@@ -163,7 +151,6 @@ def hand_tracker():
         try:
             centroidX = (blobData.centroid[0][0])*ratioX
             centroidY = (blobData.centroid[0][1])*ratioY
-            # plante ici quand pas de coordonnees
             if dummy:
                 mousePtr = display.Display().screen().root.query_pointer()._data #Gets current mouse attributes
                 dX = centroidX - strX #Finds the change in X
@@ -173,30 +160,20 @@ def hand_tracker():
                 if abs(dY) > 1: #If there was a change in Y greater than 1...
                     mouseY = mousePtr["root_y"] - 2*(dY) #New Y coordinate of mouse
                 move_mouse(mouseX,mouseY) #Moves mouse to new location
-                timerMouseStart = False
                 strX = centroidX #Makes the new starting X of mouse to current X of newest centroid
                 strY = centroidY #Makes the new starting Y of mouse to current Y of newest centroid
                 cArea = cacheAppendMean(cHullAreaCache,blobData.cHullArea[0]) #Normalizes (gets rid of noise) in the convex hull area
                 areaRatio = cacheAppendMean(areaRatioCache, blobData.contourArea[0]/cArea) #Normalizes the ratio between the contour area and convex hull area
+                if cArea < 10000 and areaRatio > 0.82: #Defines what a click down is. Area must be small and the hand must look like a binary circle (nearly)
+                    click_down(1)
+                else:
+                    click_up(1)
             else:
                 strX = centroidX #Initializes the starting X
                 strY = centroidY #Initializes the starting Y
                 dummy = True #Lets the function continue to the first part of the if statement
-                
-                if mouseToCenter:
-                    mouse_center()
-                    mouseToCenter = False
-                    
         except: #There may be no centroids and therefore blobData.centroid[0] will be out of range
             dummy = False #Waits for a new starting point
-            if timerMouseStart == False:
-                timerMouseStart = True # demarre le timer
-                debutTimer = time.time()    # prend l'heure de debut du timer en secondes
-            else:
-                if(time.time() >= debutTimer + dureeIntervalEnSecondes):
-                    mouse_hide() # Cache la souris quand aucun blob n'est
-                    timerMouseStart = False
-                    mouseToCenter = True
             
         for e in pygame.event.get(): #Itertates through current events
             if e.type is pygame.QUIT: #If the close button is pressed, the while loop ends
@@ -205,6 +182,4 @@ def hand_tracker():
 try: #Kinect may not be plugged in --> weird erros
     hand_tracker()
 except: #Lets the libfreenect errors be shown instead of python ones
-    e = sys.exc_info()[0]
-    print(e)
     pass

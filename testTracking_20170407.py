@@ -63,6 +63,10 @@ d = display.Display() #Display reference for Xlib manipulation
 scr = d.screen()
 ratioX = scr.width_in_pixels/640
 ratioY = scr.height_in_pixels/480
+mouseToCenter = False
+#timerMouseStart = False
+#debutTimer = time.time()
+#dureeIntervalEnSecondes = 0.1
     
 def move_mouse(x,y):#Moves the mouse to (x,y). x and y are ints
     s = d.screen()
@@ -161,9 +165,12 @@ def hand_tracker():
         
         #Mouse Try statement
         try:
+            print("0", dummy)
             centroidX = (blobData.centroid[0][0])*ratioX
             centroidY = (blobData.centroid[0][1])*ratioY
+            #timerMouseStart = False
             # plante ici quand pas de coordonnees
+            print("1")
             if dummy:
                 mousePtr = display.Display().screen().root.query_pointer()._data #Gets current mouse attributes
                 dX = centroidX - strX #Finds the change in X
@@ -173,6 +180,7 @@ def hand_tracker():
                 if abs(dY) > 1: #If there was a change in Y greater than 1...
                     mouseY = mousePtr["root_y"] - 2*(dY) #New Y coordinate of mouse
                 move_mouse(mouseX,mouseY) #Moves mouse to new location
+                print('mouse', timerMouseStart)
                 timerMouseStart = False
                 strX = centroidX #Makes the new starting X of mouse to current X of newest centroid
                 strY = centroidY #Makes the new starting Y of mouse to current Y of newest centroid
@@ -182,21 +190,27 @@ def hand_tracker():
                 strX = centroidX #Initializes the starting X
                 strY = centroidY #Initializes the starting Y
                 dummy = True #Lets the function continue to the first part of the if statement
+                print('2', mouseToCenter)    
                 
                 if mouseToCenter:
+                    print('mouseCenter')
                     mouse_center()
                     mouseToCenter = False
-                    
+                    print('3')
         except: #There may be no centroids and therefore blobData.centroid[0] will be out of range
             dummy = False #Waits for a new starting point
+            print('debut')
             if timerMouseStart == False:
                 timerMouseStart = True # demarre le timer
                 debutTimer = time.time()    # prend l'heure de debut du timer en secondes
+                print('timerMouseStart', debutTimer)
             else:
                 if(time.time() >= debutTimer + dureeIntervalEnSecondes):
+                    print('mouseHide',timerMouseStart, time.time() , debutTimer + dureeIntervalEnSecondes)
                     mouse_hide() # Cache la souris quand aucun blob n'est
                     timerMouseStart = False
                     mouseToCenter = True
+                    print("timerMouseStop", timerMouseStart, time.time() , debutTimer + dureeIntervalEnSecondes)        
             
         for e in pygame.event.get(): #Itertates through current events
             if e.type is pygame.QUIT: #If the close button is pressed, the while loop ends
